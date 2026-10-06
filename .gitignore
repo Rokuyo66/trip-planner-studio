@@ -1,0 +1,6 @@
+node_modules/
+__pycache__/
+*.tgz
+package/
+img/
+照片/
