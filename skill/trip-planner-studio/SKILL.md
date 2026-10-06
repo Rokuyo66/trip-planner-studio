@@ -50,11 +50,15 @@ node scripts/make_photo_folders.mjs trip.html 京都自由行/照片
 
 每個景點、餐廳、住宿、一日團、交通站各一個資料夾，名稱結尾的 `[id]` 讓頁面認得照片。
 
+### 4b. 如果碰不到使用者的電腦
+
+在 claude.ai 網頁或 App 對話裡，資料夾只會建在雲端工作區：把整個「照片」資料夾壓成 zip、連同 `trip.html` 一起給使用者下載，請他解壓到自己電腦上。
+
 ### 5. 交付
 
 告訴使用者：
 
-- 用 Chrome 或 Edge 打開 `trip.html`。
+- 用 Chrome 或 Edge 打開 `trip.html`（下載到電腦後直接雙擊）。
 - 第一次：右上角「選單 → 存檔 → 選擇照片資料夾」，選「照片」資料夾。
 - 之後補照片：按右上角「重整照片」，只會處理新增或改過的照片。照片縮小後存在這台電腦的瀏覽器裡。
 - 要發佈成可分享的網頁（例如 Claude 的 Artifact 或自己的網站）：執行 `python3 scripts/build_photos.py 照片 trip.html`，會產生 `img/` 縮圖並把清單寫進頁面，然後把 `trip.html` 和 `img/` 一起上傳。
