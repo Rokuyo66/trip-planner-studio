@@ -38,15 +38,20 @@
 skill/trip-planner-studio/
 ├── SKILL.md                     # 給 Claude 的流程說明
 ├── template/trip.html           # 引擎＋葡萄牙範例資料（單一檔案）
-├── reference/data-format.md     # 資料格式
+├── reference/
+│   ├── data-format.md           # 資料格式（含幣別與短程航線設定）
+│   └── example-kyoto.js         # 京都 7 天範例資料（日圓、短程直飛）
 └── scripts/
-    ├── check_data.mjs           # 檢查資料參照是否一致
+    ├── check_data.mjs           # 檢查資料參照、公休日衝突、重複餐廳、休閒節奏
+    ├── render_check.py          # 無頭瀏覽器逐天列出時間軸、抓頁面錯誤（需 Playwright）
     ├── make_photo_folders.mjs   # 依行程建立照片資料夾
     ├── make_map_geo.py          # 產生地圖國界
     └── build_photos.py          # 要發佈到網路時，把照片轉成縮圖並寫進頁面
 ```
 
-需要：Node.js 18+（腳本）、Python 3（地圖與照片腳本，`build_photos.py` 另需 `pip install pillow`）。
+需要：Node.js 18+（腳本）、Python 3（地圖與照片腳本，`build_photos.py` 另需 `pip install pillow`；`render_check.py` 另需 Playwright，選用）。
+
+任何幣別都可以用：日圓、韓圜、歐元…，短程航線（當天到、當天回）也支援，設定方式見 `reference/data-format.md`。
 
 ## 注意
 
