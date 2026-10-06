@@ -429,6 +429,18 @@ body.dragmode{user-select:none;cursor:grabbing}
 .tc-a{display:flex;gap:12px;align-items:center;margin-top:8px;flex-wrap:wrap}
 .tc-btn{border:1px solid var(--ochre);background:none;color:var(--ink);border-radius:999px;padding:6px 14px;cursor:pointer;min-height:36px;font-size:13px}
 .tc-btn.pri{background:var(--ochre);color:var(--on-accent);border-color:var(--ochre);font-weight:700}
+.flog{margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)}
+.fl-in{display:grid;grid-template-columns:1fr 1fr;gap:6px}.fl-in select{grid-column:1}.fl-in .btn{grid-column:2}
+.fl-in input,.fl-in select,.fl-tg input{min-height:40px}
+.fl-tg{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:10px 0 4px;font-size:13px}.fl-tg input{width:120px}
+.fl-sig{font-size:12.5px;font-weight:700}.fl-sig.ok{color:var(--ok)}.fl-sig.wait{color:var(--warn)}
+.fspark{display:block;margin:6px 0}.fs-ln{fill:none;stroke:var(--cobalt);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.fs-pt{fill:var(--cobalt)}.fs-lo{fill:var(--ok)}.fs-tg{stroke:var(--ochre);stroke-width:1.2;stroke-dasharray:4 4}.fs-tx{fill:var(--ok);font:600 11px var(--f-mono)}
+.fl-list{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:2px;max-height:200px;overflow:auto}
+.fl-list li{display:grid;grid-template-columns:92px auto 1fr auto auto;gap:8px;align-items:center;font-size:13px;padding:4px 6px;border-radius:6px}.fl-list li:hover{background:var(--tint)}
+.fl-list b{font-family:var(--f-mono)}.fl-lo{font-size:11px;font-weight:700;color:var(--ok)}
+.fl-x{border:0;background:none;color:var(--muted);cursor:pointer;font-size:16px;width:28px;height:28px;border-radius:50%}.fl-x:hover{background:var(--sunk);color:var(--ink)}
+.fl-mini{display:grid;gap:2px;margin-top:4px}.fl-mini .fspark{margin:0}.fl-ok{color:var(--ok);font-weight:700}
 </style>
 </head>
 <body>
@@ -1120,9 +1132,32 @@ function kayakLink(){const o=FLIGHTS.out,b=FLIGHTS.back,n=Math.max(1,S.pax|0);
   return 'https://www.kayak.com.tw/flights/'+o.from+'-'+o.to+'/'+iso(dateOf(o.day))+'/'+b.from+'-'+b.to+'/'+iso(dateOf(b.day))+(n>1?'/'+n+'adults':'')+'?sort=price_a';}
 function flightStale(){return S.flightFor&&S.flightFor!==fareKey();}
 function fareLinksHTML(){return '<a class="fare-a" href="'+gfMulti()+'" target="_blank" rel="noopener">Google Flights</a><a class="fare-a" href="'+skyLink()+'" target="_blank" rel="noopener">Skyscanner</a><a class="fare-a" href="'+kayakLink()+'" target="_blank" rel="noopener">Kayak</a>';}
-function renderFare(){const el=$('#fareBox'); if(!el) return; const o=FLIGHTS.out,b=FLIGHTS.back;
+function renderFare(){const el=$('#fareBox'); if(!el) return; const o=FLIGHTS.out,b=FLIGHTS.back; const LOGH=fareLogHTML();
   el.innerHTML='<div class="fare-h">查即時最低價 <span class="muted">'+o.from+'→'+o.to+' '+fmtD(dateOf(o.day))+'・'+b.from+'→'+b.to+' '+fmtD(dateOf(b.day))+'・'+Math.max(1,S.pax|0)+' 人</span></div><div class="fare-l">'+fareLinksHTML()+'</div>'+
-  (flightStale()?'<p class="fare-warn">日期已改成 '+fmtD(dateOf(1))+' 出發、'+fmtD(dateOf(FLIGHTS.back.day))+' 回程，上面的票價還是舊日期的。查完把最低價填回「每人機票」。</p>':'<p class="small muted">開新分頁帶入日期與人數，照價格排序；查到的每人價格填回上面欄位，預算立即重算。</p>');}
+  (flightStale()?'<p class="fare-warn">日期已改成 '+fmtD(dateOf(1))+' 出發、'+fmtD(dateOf(FLIGHTS.back.day))+' 回程，上面的票價還是舊日期的。查完把最低價填回「每人機票」。</p>':'<p class="small muted">開新分頁帶入日期與人數，照價格排序；查到的每人價格填回上面欄位，預算立即重算。</p>')+LOGH;}
+
+/* ---------- 機票價格紀錄 ---------- */
+function fareLog(){return (S.fareLog||[]).filter(e=>e.key===fareKey()).sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:a.t-b.t);}
+function todayISO(){const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function fareSpark(list,W,H,big){if(list.length<2) return ''; const ps=list.map(e=>e.p), lo=Math.min(...ps), hi=Math.max(...ps), tg=+S.fareTarget||0;
+  const y0=Math.min(lo,tg||lo), y1=Math.max(hi,tg||hi), span=Math.max(1,y1-y0), pad=big?14:3;
+  const X=i=>pad+(W-2*pad)*i/(list.length-1), Y=v=>pad+(H-2*pad)*(1-(v-y0)/span);
+  const pts=list.map((e,i)=>X(i).toFixed(1)+','+Y(e.p).toFixed(1)).join(' '), mi=ps.indexOf(lo);
+  return '<svg class="fspark" viewBox="0 0 '+W+' '+H+'" width="100%" height="'+H+'" role="img" aria-label="機票價格走勢，最低 '+twd(lo)+'">'+
+    (tg?'<line x1="0" x2="'+W+'" y1="'+Y(tg).toFixed(1)+'" y2="'+Y(tg).toFixed(1)+'" class="fs-tg"/>':'')+
+    '<polyline points="'+pts+'" class="fs-ln"/>'+list.map((e,i)=>'<circle cx="'+X(i).toFixed(1)+'" cy="'+Y(e.p).toFixed(1)+'" r="'+(i===mi?(big?4.5:3):(big?2.5:1.6))+'" class="'+(i===mi?'fs-lo':'fs-pt')+'"><title>'+e.d+' '+twd(e.p)+(e.src?'（'+e.src+'）':'')+'</title></circle>').join('')+
+    (big?'<text x="'+X(mi).toFixed(1)+'" y="'+(Y(lo)-8).toFixed(1)+'" class="fs-tx" text-anchor="middle">最低 '+twd(lo)+'</text>':'')+'</svg>';}
+function fareLogHTML(){const L=fareLog(), last=L[L.length-1], tg=+S.fareTarget||0, lo=L.length?Math.min(...L.map(e=>e.p)):0;
+  return '<div class="flog"><div class="fare-h">價格紀錄 <span class="muted">每次查價記一筆，看走勢再決定何時買；最新一筆會自動當成預算的機票價</span></div>'+
+    '<div class="fl-in"><input type="date" id="flD" value="'+todayISO()+'" aria-label="查價日期"><input type="number" id="flP" min="0" step="100" placeholder="每人 NT$" aria-label="每人票價"><select id="flS" aria-label="查價來源"><option>Google Flights</option><option>Skyscanner</option><option>Kayak</option><option>航空公司官網</option><option>其他</option></select><button type="button" class="btn primary" id="flAdd">記一筆</button></div>'+
+    '<div class="fl-tg"><label for="flT">目標價 NT$</label><input type="number" id="flT" min="0" step="500" value="'+(tg||'')+'" placeholder="例：28000">'+(last&&tg?'<span class="fl-sig '+(last.p<=tg?'ok':'wait')+'">'+(last.p<=tg?'● 已低於目標價，可以考慮買':'● 還沒到目標價，差 '+twd(last.p-tg))+'</span>':'')+'</div>'+
+    (L.length>=2?fareSpark(L,420,120,true):'')+
+    (L.length?'<ul class="fl-list">'+L.slice().reverse().map(e=>'<li><span>'+e.d+'</span><b>'+twd(e.p)+'</b><span class="muted">'+esc(e.src||'')+'</span>'+(e.p===lo?'<span class="fl-lo">最低</span>':'')+'<button type="button" class="fl-x" data-fldel="'+e.t+'" aria-label="刪除這筆">×</button></li>').join('')+'</ul>':'<p class="small muted">還沒有紀錄。查完價把每人價格填上去，記兩筆以上就會出現走勢圖。</p>')+
+    '<p class="small muted">紀錄跟著出發日與天數走；改日期後會開新的一組紀錄，舊的會保留。要讓 Google 自動盯價，點上面的 Google Flights，在結果頁打開「追蹤價格」即可收到降價通知信。</p></div>';}
+function fareLogInit(){document.addEventListener('click',e=>{
+    if(e.target.closest('#flAdd')){const p=+$('#flP').value, d=$('#flD').value||todayISO(); if(!p){toast('先填每人票價'); return;} S.fareLog=S.fareLog||[]; S.fareLog.push({d,p,src:$('#flS').value,key:fareKey(),t:Date.now()}); const L=fareLog(); S.flight=L[L.length-1].p; S.flightFor=fareKey(); syncControls(); recompute(); toast('已記錄 '+twd(p)+'，預算已更新');}
+    const x=e.target.closest('[data-fldel]'); if(x){S.fareLog=(S.fareLog||[]).filter(q=>String(q.t)!==x.dataset.fldel); recompute();}});
+  document.addEventListener('change',e=>{if(e.target.id==='flT'){S.fareTarget=+e.target.value||0; recompute();}});}
 function flightLinksHTML(which,full){
   const ks=which?[which]:['out','back'];
   const a=ks.map(k=>{const f=FLIGHTS[k]; return '<a href="'+gfLink(f)+'" target="_blank" rel="noopener">Google Flights：'+(full?esc(f.label)+' '+fmtD(dateOf(f.day)):f.from+'→'+f.to)+'</a>';});
@@ -1455,7 +1490,7 @@ function renderSummary(r){
    '<div class="stat main"><div class="lbl">'+(pp?'每人預算':'總預算')+'（'+MODE_NAME[S.mode]+'・'+sg.name+'）</div><div class="big">'+twd(r.per)+'</div><div class="small">'+(pp?'全團 '+r.pax+' 人 '+twd(r.twd)+' ・ ':'')+'當地花費 '+eur(r.eur)+' ＋ 機票與行前雜支</div></div>'+
    '<div class="stat'+(okAll?'':' badstat')+'"><div class="lbl">住宿 8 晚・入住 '+checkins()+' 次'+(okAll?'':'・有住宿住不下')+'</div><div class="mid">'+eur(r.stay)+'</div>'+(pp?'<div class="small muted">每人 '+eur(r.stay/r.pax)+'</div>':'')+'</div>'+
    '<div class="stat"><div class="lbl">當地交通</div><div class="mid">'+eur(r.transport)+'</div>'+(pp?'<div class="small muted">每人 '+eur(r.transport/r.pax)+'</div>':'')+'</div>'+
-   '<div class="stat fare'+(flightStale()?' stale':'')+'"><div class="lbl">機票（每人）'+(flightStale()?'・日期已改':'')+'</div><div class="mid">'+twd(S.flight)+'</div><button type="button" class="fare-btn" data-open="settings" data-focus="flight">查即時最低價 ↗</button></div>'+
+   '<div class="stat fare'+(flightStale()?' stale':'')+'"><div class="lbl">機票（每人）'+(flightStale()?'・日期已改':'')+'</div><div class="mid">'+twd(S.flight)+'</div>'+(()=>{const L=fareLog(); if(!L.length) return ''; const lo=Math.min(...L.map(e=>e.p)), last=L[L.length-1], tg=+S.fareTarget||0; return '<div class="fl-mini">'+fareSpark(L,160,30,false)+'<span class="small'+(tg&&last.p<=tg?' fl-ok':'')+'">最低 '+twd(lo)+'・'+L.length+' 筆'+(tg&&last.p<=tg?'・已達目標':'')+'</span></div>';})()+'<button type="button" class="fare-btn" data-open="settings" data-focus="flight">查價・記錄價格 ↗</button></div>'+
    '<div class="stat"><div class="lbl">門票＋餐費</div><div class="mid">'+eur(r.tickets+r.meals)+'</div>'+(pp?'<div class="small muted">每人 '+eur((r.tickets+r.meals)/r.pax)+'</div>':'')+'</div>';
   const route=sg.nights.filter(Boolean).reduce((a,c)=>{if(a[a.length-1]!==c)a.push(c);return a;},[]).map(c=>STAYS[c].label).join(' → ');
   const sty=STYLES[S.style]||STYLES.custom;
@@ -1919,7 +1954,7 @@ function applyTheme(t){document.documentElement.setAttribute('data-theme',t); co
 function themeInit(){let t=null; try{t=localStorage.getItem(THEME_KEY);}catch(e){}
   if(t!=='light'&&t!=='dark') t=(window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';
   applyTheme(t); $('#themeBtn').addEventListener('click',()=>{const n=document.documentElement.getAttribute('data-theme')==='light'?'dark':'light'; applyTheme(n); try{localStorage.setItem(THEME_KEY,n);}catch(e){} if(typeof renderDyn==='function') renderDyn();});}
-function stageInit(){themeInit(); dragInit(); planInit(); stayImgInit(); tourInit(); photoInit();document.addEventListener('click',e=>{const f=e.target.closest('[data-focus]'); if(f) setTimeout(()=>{const t=$('#'+f.dataset.focus); if(t){t.focus(); const fb=$('#fareBox'); if(fb) fb.scrollIntoView({block:'nearest'});}},260);});
+function stageInit(){fareLogInit(); themeInit(); dragInit(); planInit(); stayImgInit(); tourInit(); photoInit();document.addEventListener('click',e=>{const f=e.target.closest('[data-focus]'); if(f) setTimeout(()=>{const t=$('#'+f.dataset.focus); if(t){t.focus(); const fb=$('#fareBox'); if(fb) fb.scrollIntoView({block:'nearest'});}},260);});
   document.addEventListener('click',e=>{const b=e.target.closest('[data-open]'); if(b){openDrawer(b.dataset.open); return;}
     if(e.target.closest('.dr-close')||e.target.id==='scrim'){closeDrawers(); return;}});
   document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(UI.pop){UI.pop=null; renderPop(); renderDyn();} closeDrawers();}});
