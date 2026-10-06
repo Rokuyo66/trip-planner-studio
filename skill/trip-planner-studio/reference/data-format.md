@@ -13,12 +13,32 @@ ID 規則：全部小寫英數與底線，建議用「城市代碼_名稱」，�
 
 | 常數 | 說明 |
 |---|---|
-| `TRIP_META` | `title` 標題、`eyebrow` 小標（航線）、`sub` 副標、`currency`、`local`（當地幣別符號）、`key`／`ckey`（瀏覽器暫存用的唯一名稱，每趟旅行不同）、`home`（出發城市中文名）、`extras`（每人行前雜支：`eur` 當地幣、`twd` 台幣、`carTwd` 租車才有的雜支、`note`／`carNote` 說明文字） |
+| `TRIP_META` | `title` 標題、`eyebrow` 小標（航線）、`sub` 副標、`currency`、`local`（當地幣別符號）、`key`／`ckey`（瀏覽器暫存用的唯一名稱，每趟旅行不同）、`home`（出發城市中文名）、`extras`（每人行前雜支：`eur` 當地幣（欄位名沿用 eur，填當地幣金額）、`twd` 台幣、`carTwd` 租車才有的雜支、`note`／`carNote` 說明文字）。其他選用欄位見下方「幣別與地區設定」 |
 | `FLIGHTS` | `out`／`back`：`day` 第幾天、`from`／`to` 機場三碼、`label`。查價連結用這裡組 |
-| `DEFAULTS` | 頁面初始值：`start` 出發日、`mode`（`transit`／`hybrid`／`car`）、`strat` 住宿策略、`fx` 匯率、`flight` 每人機票台幣、`meal` 每日餐費、`pax`、`room`、`stays`（每城市 `{sel, price:[各選項雙人房價], custom:{…}}`）、`params`（租車、油價、停車：`park` + 城市代碼）、`must`（必去清單範例，可留空陣列） |
+| `DEFAULTS` | 頁面初始值：`start` 出發日、`mode`（`transit`／`hybrid`／`car`）、`strat` 住宿策略、`style` 旅遊傾向（`custom`／`budget`／`cp`／`leisure`）、`fx` 匯率（1 單位當地幣＝多少台幣）、`flight` 每人機票台幣、`meal` 每日餐費、`pax`、`room`、`stays`（每城市 `{sel, price:[各選項雙人房價], custom:{…}}`）、`params`（租車、油價、停車：`park` + 城市代碼）、`must`（必去清單範例，可留空陣列） |
 | `PARAM_LABELS` | `params` 在預算頁的標籤與步進值 |
 | `MODE_DESC` | 三種交通方案的說明文字 |
 | `CAR_DAYS` | 預設哪幾天有租車（引擎會依 `CAR_FROM` 重算，這裡只是初值） |
+
+### 幣別與地區設定（TRIP_META 選用欄位）
+
+引擎預設是歐元、長程夜班機。換成別的幣別或短程航線，在 `TRIP_META` 加這些欄位，引擎不用改：
+
+| 欄位 | 說明 | 範例（日本） |
+|---|---|---|
+| `local` | 當地幣別符號，所有金額、標籤都會用它 | `'¥'` |
+| `curName` | 匯率欄位顯示的幣別名稱 | `'日圓'` |
+| `k` | 約等於 1 歐元的當地金額。旅遊傾向的門票門檻、預設計程車與城際火車估價都乘上它；≥50 時金額不顯示小數 | `100` |
+| `homeDay` | 設 `false`：沒有「抵家日」，`DAYS` 最後一天就是回程日（短程航線當天到家）。D1 也可以住當地（`STRATS.nights[0]` 填城市） | `false` |
+| `fare0` | `FARE` 沒列到的城市的市區單程票價 | `230` |
+| `taxi` | `{min, base, km, label}` 計程車估價：`max(min, base + km × 公里)` | `{min:600,base:130,km:390,label:'計程車／GO（估）'}` |
+| `rail` | `{base, km, km2, label, label2}` 超過 40 km 沒指定路段時的城際火車估價 | `{base:200,km:17,km2:20,label:'JR／私鐵（估）'}` |
+| `railRe` | 哪些路段說明算火車（每段多算 10 分鐘候車）的正規表示式字串 | 預設已含 CP、JR、近鐵、新幹線等 |
+| `modeLabels` | 三種交通方案按鈕的文字 | `{transit:'大眾交通（推薦）',hybrid:'混合',car:'全程自駕'}` |
+| `budgetMeal` | 「窮遊」傾向的每日餐費；不填就是 `25 × k` | `2500` |
+| `retNote` | 改到其他機場回程時的說明，`{city}` 會換成城市名 | `'退房去{city}機場…'` |
+
+其他會自動跟著資料變的地方：住宿策略按鈕依 `STRATS` 產生（鍵名、數量不限）；`HUBS` 留空 `{}` 時隱藏轉機地選項、航班標成直飛；去回同一個機場時，查價連結改成「來回票」。`PAY` 可以自己加付款方式鍵（例如 `ic:'交通 IC 卡'`），路段的 `pay` 直接用。
 
 ## 地點
 
@@ -43,7 +63,7 @@ kyo_fushimi:{n:'伏見稻荷大社',a:'京都市伏見区深草藪之内町68',l
 
 ## 每一天
 
-`DAYS`：陣列，第 1 天是出發、倒數第 2 天是回程、最後一天是抵家。
+`DAYS`：陣列，第 1 天是出發、倒數第 2 天是回程、最後一天是抵家。`TRIP_META.homeDay:false` 時沒有抵家日，最後一天就是回程日。
 
 ```js
 {start:'09:15',t:'標題（字串或 c=>字串）',note:'說明（字串或 c=>字串）',
@@ -60,7 +80,15 @@ kyo_fushimi:{n:'伏見稻荷大社',a:'京都市伏見区深草藪之内町68',l
 | `drive` | 自駕 | `toll` 過路費 |
 | `fixed` | 固定班次（火車、巴士、纜車、步道） | `label`、`fare`、`mins`、`tm`（`transit`／`walking`）、`walk:true`、`pay` |
 | `airport` | 機場進出（用 `AIRPORT` 的票價） | |
-| `flight` | 航班 | `label`、`fl:'out'`或`'back'` |
+| `flight` | 航班（時間軸上長度為 0） | `label`、`fl:'out'`或`'back'` |
+
+短程航線當天就要排行程時，在 `flight` 後面接一段 `fixed` 代表飛行＋入境的時間，時間軸才會從落地後開始：
+
+```js
+{c:'flight',f:'tpe',to:'kix',label:'TPE → KIX 直飛',fl:'out'},
+{c:'fixed',f:'kix',to:'kix_arr',label:'飛行約 2 小時 30 分（時差 +1 小時）＋入境、領行李',fare:0,mins:255,tm:'transit'},
+{c:'airport',f:'kix_arr',to:c.E}
+```
 
 `tix` 類別：`null` 門票、`'transport'` 交通卡、`'bag'` 寄物（租車日自動免）。付款：`online`、`card`、`cash`、`either`（對照 `PAY`）。
 
@@ -68,7 +96,7 @@ kyo_fushimi:{n:'伏見稻荷大社',a:'京都市伏見区深草藪之内町68',l
 
 | 常數 | 說明 |
 |---|---|
-| `DEF_PLAN` | 中段預設行程日，`'t2'`＝`DAYS` 第 2 天 |
+| `DEF_PLAN` | 中段預設行程日，`'t2'`＝`DAYS` 第 2 天；範圍是 t2 到回程日前一天 |
 | `DROP_ORDER` | 使用者縮短天數時的刪除順序（最不重要的放前面） |
 | `FREE_CITIES` | 可以加「自由日」的城市（要有 `STAYS`） |
 | `CAR_FROM` | 混合方案從原本第幾天開始租車 |
@@ -125,3 +153,9 @@ tour_x:{for:'t3',city:'LIS',n:'一日團：…',meet:'集合點',lat:..,lng:..,s
 | `TIMELINE` | 出發前倒數待辦 `(add,day,car)=>[[日期,文字],…]` |
 | `CHECK` | 申辦與準備清單、緊急聯絡（含當地代表處與使用者需要的大使館） |
 | `BOOKLET_PLACES` | 列印小冊子「重要地點」要列出的 ID |
+
+## 範例
+
+- `template/trip.html`：葡萄牙 11 天，歐元、長程夜班機、多城市換住宿、自駕方案。
+- `reference/example-kyoto.js`：京都 7 天，日圓、短程直飛當天到家、D1 就入住、單一城市＋奈良一日、可選「奈良住一晚」。寫亞洲短程或非歐元目的地時照這份的形狀（`MAP_GEO` 已省略，要自己用 `make_map_geo.py` 產生）。
+

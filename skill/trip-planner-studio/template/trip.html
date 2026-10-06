@@ -441,6 +441,7 @@ body.dragmode{user-select:none;cursor:grabbing}
 .fl-list b{font-family:var(--f-mono)}.fl-lo{font-size:11px;font-weight:700;color:var(--ok)}
 .fl-x{border:0;background:none;color:var(--muted);cursor:pointer;font-size:16px;width:28px;height:28px;border-radius:50%}.fl-x:hover{background:var(--sunk);color:var(--ink)}
 .fl-mini{display:grid;gap:2px;margin-top:4px}.fl-mini .fspark{margin:0}.fl-ok{color:var(--ok);font-weight:700}
+@media (max-width:560px){.stat .mid{font-size:clamp(12px,3.4vw,19px);white-space:nowrap}}
 </style>
 </head>
 <body>
@@ -558,8 +559,8 @@ body.dragmode{user-select:none;cursor:grabbing}
     </div>
     <div class="ctl-row">
       <div class="ctl"><label for="flight">每人機票（開口）NT$</label><input type="number" id="flight" step="500" min="0"></div>
-      <div class="ctl"><label for="fx">1 歐元＝NT$</label><input type="number" id="fx" step="0.1" min="0"></div>
-      <div class="ctl"><label for="meal">每日餐費 €</label><input type="number" id="meal" step="1" min="0"></div>
+      <div class="ctl"><label for="fx">1 <span id="curName">歐元</span>＝NT$</label><input type="number" id="fx" step="0.1" min="0"></div>
+      <div class="ctl"><label for="meal">每日餐費 <span id="curSym">€</span></label><input type="number" id="meal" step="1" min="0"></div>
     </div>
   </div>
   <div class="ctl pe-wrap"><span class="lbl">天數與每日安排</span><div id="planEd"></div></div>
@@ -654,6 +655,7 @@ body.dragmode{user-select:none;cursor:grabbing}
 "use strict";
 /* ===== TRIP DATA START：換目的地時只替換這一段（到 TRIP DATA END 為止）===== */
 const TRIP_META={eyebrow:'TPE → LIS ・ OPO → TPE',title:'葡萄牙 2027 春行',sub:'里斯本、辛特拉、孔布拉、波多 11 天。改住宿安排、交通方式、人數、日期或任何地點座標，路線與費用會即時重算。',currency:'EUR',local:'€',key:'pt2027-plan-v2',ckey:'pt2027-check-v1',home:'台北',
+  taxi:{label:'Uber／Bolt／計程車（估）'},rail:{label:'CP 城際火車（依距離估價，實際以 CP 官網為準）',label2:'CP 火車／長途巴士（估）'},railRe:'CP|火車|Alfa|區間車',retNote:'退房去{city}機場。申根出境與退稅都在這裡辦，預留 3 小時。',
   extras:{eur:20,twd:2200,carTwd:250,note:'ETIAS €20、旅平險約 NT$1,500、eSIM 約 NT$700',carNote:'國際駕照 NT$250'}};
 const FLIGHTS={out:{day:1,from:'TPE',to:'LIS',label:'去程 台北 → 里斯本'},back:{day:10,from:'OPO',to:'TPE',label:'回程 波多 → 台北'}};
 const CITY_TAX={LIS:{v:4,max:7},POR:{v:3,max:7},SIN:{v:2,max:7,est:true},COI:{v:2,max:7,est:true}};
@@ -1024,8 +1026,17 @@ const TOURS={
 };
 /* ===== TRIP DATA END ===== */
 /* ---------- 天數規劃：中段每天是一個「日模組」，可刪、加自由日、換順序、改回程日 ---------- */
+const HOME_DAY=TRIP_META.homeDay===false?0:1, TAIL=HOME_DAY?['tR','tH']:['tR'];
+const CUR=TRIP_META.local||'€', CK=TRIP_META.k||1;
+const TX=Object.assign({min:6*CK,base:3.5*CK,km:0.95*CK,label:'計程車／叫車（估）'},TRIP_META.taxi||{});
+const RAILX=Object.assign({base:4*CK,km:0.07*CK,km2:0.1*CK,label:'城際火車（依距離估價）',label2:'火車／長途巴士（估）'},TRIP_META.rail||{});
+try{const ML=TRIP_META.modeLabels||{}; Object.keys(ML).forEach(k=>{const b=document.querySelector('#modeSeg [data-mode="'+k+'"]'); if(b) b.textContent=ML[k];});}catch(e){}
+try{document.getElementById('curName').textContent=TRIP_META.curName||'歐元'; document.getElementById('curSym').textContent=CUR; document.getElementById('fx').step='any'; document.getElementById('meal').step=String(CK>=50?100:1);}catch(e){}
+try{const ss=document.getElementById('stratSeg'); ss.innerHTML=Object.keys(STRATS).map(k=>'<button type="button" data-strat="'+k+'">'+STRATS[k].name+'</button>').join('');
+  const vs=document.getElementById('viaSeg'), hk=Object.keys(HUBS); if(!hk.length) vs.closest('.ctl').style.display='none'; else vs.innerHTML='<button type="button" data-via="">不指定</button>'+hk.map(k=>'<button type="button" data-via="'+k+'">'+HUBS[k].n.replace(/機場.*/,'')+'</button>').join('');
+  if(FLIGHTS.out.to===FLIGHTS.back.from) document.querySelector('label[for=flight]').textContent='每人機票（來回）NT$';}catch(e){}
 const BASE_DAYS=DAYS.slice(); const BASE_NIGHTS={}; Object.keys(STRATS).forEach(k=>BASE_NIGHTS[k]=STRATS[k].nights.slice());
-let TOKENS=['t1'].concat(DEF_PLAN,['t10','t11']);
+let TOKENS=['t1'].concat(DEF_PLAN,TAIL);
 CANDS.forEach(c=>{c.baseDay=c.day;});
 Object.keys(TOURS).forEach(id=>{const T0=TOURS[id]; PLACES[id]={n:T0.n.replace(/^一日團：/,'')+'（一日團）',a:T0.meet,lat:T0.lat,lng:T0.lng,city:T0.city,poi:true,tour:true,url:T0.src,urlLabel:'一日團介紹頁'}; VISIT[id]=[T0.dur,T0.lunch?'visitLunch':'visit',T0.start,T0.incl]; FAME[id]=3; TIX_OF[T0.n+'（團費，約）']=id;});
 function planOf(){return (Array.isArray(S.plan)&&S.plan.length)?S.plan:DEF_PLAN.slice();}
@@ -1036,23 +1047,23 @@ function freeDay(city){return {start:'09:30',t:CITY_ZH[city]+'自由日',free:ci
   segs:c=>[{c:'city',f:c.S||c.E,to:c.E||c.S,keep:true}],tix:c=>[]};}
 let RET_CITY=null; const BASE_RET=FLIGHTS.back.from, BASE_RET_LABEL=FLIGHTS.back.label;
 function RET_OF(){return RET_CITY;}
-function retDay(city){const b=BASE_DAYS[BASE_DAYS.length-2], ra=RET_AIR[city]; if(!ra||ra.code===BASE_RET) return b; const home=FLIGHTS.out.from.toLowerCase();
+function retDay(city){const b=BASE_DAYS[BASE_DAYS.length-1-HOME_DAY], ra=RET_AIR[city]; if(!ra||ra.code===BASE_RET) return b; const home=FLIGHTS.out.from.toLowerCase();
   const homeId=PLACES[home]?home:Object.keys(PLACES)[0];
-  return Object.assign({},b,{note:'退房去'+(CITY_ZH[city]||city)+'機場。申根出境與退稅都在這裡辦，預留 3 小時。',
-    segs:c=>[{c:'airport',f:c.S,to:ra.id},{c:'flight',f:ra.id,to:homeId,label:ra.code+' → '+FLIGHTS.out.from+'，一次轉機',fl:'back'}],
-    car:c=>[{c:'drive',f:c.S,to:ra.id,hint:'機場還車，還車前在附近加滿油'},{c:'flight',f:ra.id,to:homeId,label:ra.code+' → '+FLIGHTS.out.from+'，一次轉機',fl:'back'}]});}
+  return Object.assign({},b,{note:TRIP_META.retNote?TRIP_META.retNote.replace('{city}',CITY_ZH[city]||city):'退房去'+(CITY_ZH[city]||city)+'機場。出境手續與退稅都在這裡辦，預留 3 小時。',
+    segs:c=>[{c:'airport',f:c.S,to:ra.id},{c:'flight',f:ra.id,to:homeId,label:ra.code+' → '+FLIGHTS.out.from+(Object.keys(HUBS).length?'，一次轉機':'，直飛'),fl:'back'}],
+    car:c=>[{c:'drive',f:c.S,to:ra.id,hint:'機場還車，還車前在附近加滿油'},{c:'flight',f:ra.id,to:homeId,label:ra.code+' → '+FLIGHTS.out.from+(Object.keys(HUBS).length?'，一次轉機':'，直飛'),fl:'back'}]});}
 function tourOf(tok){if(tok&&tok[0]==='g') return TOURS[tok.slice(2)]?tok.slice(2):null; const k=S.tourOn&&S.tourOn[tok]; return k&&TOURS[k]&&TOURS[k].for===tok?k:null;}
 function tourDay(id){const T0=TOURS[id]; return {start:T0.start>'08:00'?'07:45':'07:15',t:T0.n,tour:id,meal:true,
   note:T0.why+'（'+T0.rating+'）',
   segs:c=>[{c:'city',f:c.S||c.E,to:id,hint:'到集合點'},{c:'city',f:id,to:c.E||c.S,hint:'行程結束回住宿'}],tix:c=>[[T0.n+'（團費，約）',T0.price,null,'online']]};}
-function rebuildPlan(){const p=planOf(); TOKENS=['t1'].concat(p,['t10','t11']); const L=TOKENS.length;
-  Object.keys(STRATS).forEach(k=>{STRATS[k].nights=TOKENS.map((tok,i)=>{if(i===0||i>=L-2) return null; const fc=nightCity(tok); return fc||BASE_NIGHTS[k][+tok.slice(1)-1];});});
-  const ln=STRATS[S.strat||'easy'].nights[L-3]; RET_CITY=AIR_OF[ln]||null; if(!RET_AIR[RET_CITY]) RET_CITY=Object.keys(RET_AIR).find(k=>RET_AIR[k].code===BASE_RET)||null;
-  DAYS.length=0; TOKENS.forEach((tok,i)=>DAYS.push(i===L-2?retDay(RET_CITY):(i===L-1?BASE_DAYS[BASE_DAYS.length-1]:(tourOf(tok)?tourDay(tourOf(tok)):(freeCity(tok)?freeDay(freeCity(tok)):BASE_DAYS[+tok.slice(1)-1])))));
-  FLIGHTS.back.day=L-1; const ra=RET_AIR[RET_CITY]; FLIGHTS.back.from=ra?ra.code:BASE_RET; FLIGHTS.back.label=ra&&ra.code!==BASE_RET?'回程 '+(CITY_ZH[RET_CITY]||RET_CITY)+' → '+(TRIP_META.home||''):BASE_RET_LABEL;
-  const mid=[]; for(let i=2;i<=L-1;i++) mid.push(i);
+function rebuildPlan(){const p=planOf(); TOKENS=['t1'].concat(p,TAIL); const L=TOKENS.length;
+  Object.keys(STRATS).forEach(k=>{STRATS[k].nights=TOKENS.map((tok,i)=>{if(i>=L-1-HOME_DAY) return null; if(i===0) return BASE_NIGHTS[k][0]||null; const fc=nightCity(tok); return fc||BASE_NIGHTS[k][+tok.slice(1)-1];});});
+  const ln=STRATS[S.strat||'easy'].nights[L-2-HOME_DAY]; RET_CITY=AIR_OF[ln]||null; if(!RET_AIR[RET_CITY]) RET_CITY=Object.keys(RET_AIR).find(k=>RET_AIR[k].code===BASE_RET)||null;
+  DAYS.length=0; TOKENS.forEach((tok,i)=>DAYS.push(i===L-1-HOME_DAY?retDay(RET_CITY):(i===L-1?BASE_DAYS[BASE_DAYS.length-1]:(tourOf(tok)?tourDay(tourOf(tok)):(freeCity(tok)?freeDay(freeCity(tok)):BASE_DAYS[+tok.slice(1)-1])))));
+  FLIGHTS.back.day=L-HOME_DAY; const ra=RET_AIR[RET_CITY]; FLIGHTS.back.from=ra?ra.code:BASE_RET; FLIGHTS.back.label=ra&&ra.code!==BASE_RET?'回程 '+(CITY_ZH[RET_CITY]||RET_CITY)+' → '+(TRIP_META.home||''):BASE_RET_LABEL;
+  const mid=[]; for(let i=2;i<=L-HOME_DAY;i++) mid.push(i);
   CAR_DAYS.transit=[]; CAR_DAYS.car=mid.slice();
-  CAR_DAYS.hybrid=mid.filter(idx=>{const tok=TOKENS[idx-1]; if(idx===L-1) return true; if(tok[0]==='f'||tok[0]==='g'){const prev=TOKENS.slice(1,idx-1).some(t=>t[0]==='t'&&+t.slice(1)>=CAR_FROM); return prev;} return +tok.slice(1)>=CAR_FROM;});
+  CAR_DAYS.hybrid=mid.filter(idx=>{const tok=TOKENS[idx-1]; if(idx===L-HOME_DAY) return true; if(tok[0]==='f'||tok[0]==='g'){const prev=TOKENS.slice(1,idx-1).some(t=>t[0]==='t'&&+t.slice(1)>=CAR_FROM); return prev;} return +tok.slice(1)>=CAR_FROM;});
   CANDS.forEach(c=>{const ov=S.candDay&&S.candDay[c.id]; const i=ov?TOKENS.indexOf(ov):TOKENS.indexOf('t'+c.baseDay); c.day=i>=0?i+1:0;});}
 /* 每個固定景點原本屬於哪一天 */
 const POI_HOME={};
@@ -1067,8 +1078,8 @@ function moveTo(id,tok){S.moveTo=S.moveTo||{}; S.candDay=S.candDay||{};
   if(CAND_OF[id]){if(tok==='t'+CAND_OF[id].baseDay) delete S.candDay[id]; else S.candDay[id]=tok; S.add=S.add||{}; S.add[id]=true;}
   else {if(tok===POI_HOME[id]) delete S.moveTo[id]; else S.moveTo[id]=tok; if(S.skip) delete S.skip[id];}
   S.style='custom';}
-function retDateFor(L){return dateOf(L-1);}
-function setTripLen(L){L=Math.max(4,Math.min(22,L)); let p=planOf().slice(); const want=L-3;
+function retDateFor(L){return dateOf(L-HOME_DAY);}
+function setTripLen(L){L=Math.max(4,Math.min(22,L)); let p=planOf().slice(); const want=L-2-HOME_DAY;
   while(p.length>want){let k=-1; for(let i=p.length-1;i>=0;i--) if(p[i][0]==='f'||p[i][0]==='g'){k=i;break;} if(k<0){for(const d of DROP_ORDER){const j=p.indexOf(d); if(j>=0){k=j;break;}}} if(k<0) k=p.length-1; p.splice(k,1);}
   while(p.length<want){const last=p.length?p[p.length-1]:'t2'; let fc=nightCity(last)||(STRATS[S.strat||'easy'].nights[TOKENS.indexOf(last)]||FREE_CITIES[FREE_CITIES.length-1]); if(!FREE_CITIES.includes(fc)) fc=FREE_CITIES.includes(AIR_OF[fc])?AIR_OF[fc]:FREE_CITIES[0]; p.push('f:'+fc);}
   S.plan=p;}
@@ -1085,7 +1096,7 @@ let checks={}; try{checks=JSON.parse(localStorage.getItem(CKEY)||'{}')||{};}catc
 /* ---------- helpers ---------- */
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const eur=v=>'€'+(v>=100?Math.round(v).toLocaleString('en-US'):v.toFixed(2).replace(/\.00$/,''));
+const eur=v=>CUR+(v>=100||CK>=50?Math.round(v).toLocaleString('en-US'):v.toFixed(2).replace(/\.00$/,''));
 const twd=v=>'NT$'+Math.round(v).toLocaleString('en-US');
 function parseCoord(str){
   if(!str) return null; const s=String(str).trim();
@@ -1109,7 +1120,7 @@ function stayPlace(city){
 function stayPrice(city){const s=S.stays[city]; return s.sel===9?(+s.custom.price||0):(+s.price[s.sel]||0);}
 function hav(a,b){const R=6371,r=x=>x*Math.PI/180;const dLa=r(b.lat-a.lat),dLo=r(b.lng-a.lng);const h=Math.sin(dLa/2)**2+Math.cos(r(a.lat))*Math.cos(r(b.lat))*Math.sin(dLo/2)**2;return 2*R*Math.asin(Math.sqrt(h));}
 function roadKm(a,b){const d=hav(a,b);return d*(d>20?1.2:1.3);}
-function uber(km){return Math.max(6,3.5+0.95*km);}
+function uber(km){return Math.max(TX.min,TX.base+TX.km*km);}
 function gm(a,b,mode){return 'https://www.google.com/maps/dir/?api=1&origin='+a.lat+','+a.lng+'&destination='+b.lat+','+b.lng+'&travelmode='+mode;}
 /* Google Flights 連結：用 tfs 參數（protobuf）直接帶入起訖機場、日期、人數、艙等 */
 function pbVarint(n){const o=[]; while(n>127){o.push((n&127)|128); n=Math.floor(n/128);} o.push(n); return o;}
@@ -1161,8 +1172,8 @@ function fareLogInit(){document.addEventListener('click',e=>{
 function flightLinksHTML(which,full){
   const ks=which?[which]:['out','back'];
   const a=ks.map(k=>{const f=FLIGHTS[k]; return '<a href="'+gfLink(f)+'" target="_blank" rel="noopener">Google Flights：'+(full?esc(f.label)+' '+fmtD(dateOf(f.day)):f.from+'→'+f.to)+'</a>';});
-  a.push('<a href="'+gfMulti()+'" target="_blank" rel="noopener">Google Flights：多城市開口票'+(full?'（去程＋回程一起查）':'')+'</a>');
-  a.push('<a href="'+skyLink()+'" target="_blank" rel="noopener">Skyscanner 開口票比價</a>');
+  a.push('<a href="'+gfMulti()+'" target="_blank" rel="noopener">Google Flights：'+(FLIGHTS.out.to===FLIGHTS.back.from?'來回票':'多城市開口票')+(full?'（去程＋回程一起查）':'')+'</a>');
+  a.push('<a href="'+skyLink()+'" target="_blank" rel="noopener">Skyscanner '+(FLIGHTS.out.to===FLIGHTS.back.from?'來回':'開口票')+'比價</a>');
   return a.join(full?'<br>':'<br>');
 }
 function carDays(mode){return CAR_DAYS[mode]||[];}
@@ -1186,10 +1197,10 @@ function legOf(seg,dayIdx,mode,P){
     else{const ap=AIRPORT[AIRPORT[b.city]?b.city:(AIRPORT[a.city]?a.city:Object.keys(AIRPORT)[0])]; r={how:'transit',label:'大眾',km:roadKm(a,b),mins:ap.mins,cost:ap.fare,detail:ap.label,tm:'transit',fareCity:null};}
   } else { // city
     const km=roadKm(a,b);
-    if(km>40){ if(car) r=driveLeg(a,b,{toll:Math.round(km*0.06)},P); else r={how:'transit',label:'大眾',km,mins:30+km/90*60,cost:Math.round((4+km*0.07)*100)/100,detail:'CP 城際火車（依距離估價，實際以 CP 官網為準）',tm:'transit'}; }
+    if(km>40){ if(car) r=driveLeg(a,b,{toll:Math.round(km*0.06)},P); else r={how:'transit',label:'大眾',km,mins:30+km/90*60,cost:Math.round((RAILX.base+km*RAILX.km)*100)/100,detail:RAILX.label,tm:'transit'}; }
     else if(km<=1.5) r={how:'walk',label:'步行',km,mins:km/4.5*60,cost:0,detail:'步行',tm:'walking'};
     else if(car&&mode==='car') r=driveLeg(a,b,seg,P);
-    else {const city=a.stay?a.city:(b.stay?b.city:(CAP[a.city]?a.city:(CAP[b.city]?b.city:a.city))); r={how:'transit',label:'大眾',km,mins:8+km/18*60,cost:FARE[city]||1.66,detail:'地鐵／公車／電車',tm:'transit',fareCity:city};}
+    else {const city=a.stay?a.city:(b.stay?b.city:(CAP[a.city]?a.city:(CAP[b.city]?b.city:a.city))); r={how:'transit',label:'大眾',km,mins:8+km/18*60,cost:FARE[city]||(TRIP_META.fare0||1.66),detail:'地鐵／公車／電車',tm:'transit',fareCity:city};}
   }
   if(seg.force){const fm=seg.force==='car'&&!car?'taxi':seg.force; r=altLeg(fm,a,b,seg,P); if(fm!==seg.force) r.forceNote='這天沒有租車，必走路線先以計程車估價';}
   const okey=dayIdx+'|'+seg.f+'|'+seg.to;
@@ -1307,12 +1318,12 @@ function applyStyle(k){rebuildPlan();
   S.style=k; if(k==='custom'){renderPlaces(); recompute(); return;}
   const skip={}, add={};
   if(k==='budget'){
-    Object.keys(FAME).forEach(id=>{if(!CAND_OF[id]&&(POI_PRICE[id]||0)>=15) skip[id]=true;});
-    CANDS.forEach(c=>{if(c.fame>=2&&c.price<=4&&c.kind!=='meal') add[c.id]=true;});
-    S.mode='transit'; S.meal=25;
+    Object.keys(FAME).forEach(id=>{if(!CAND_OF[id]&&(POI_PRICE[id]||0)>=15*CK) skip[id]=true;});
+    CANDS.forEach(c=>{if(c.fame>=2&&c.price<=4*CK&&c.kind!=='meal') add[c.id]=true;});
+    S.mode='transit'; S.meal=TRIP_META.budgetMeal||25*CK;
   } else if(k==='cp'){
-    Object.keys(FAME).forEach(id=>{if(!CAND_OF[id]&&(POI_PRICE[id]||0)>=20&&FAME[id]<3) skip[id]=true;});
-    CANDS.forEach(c=>{if((c.fame>=2&&c.price<=5&&c.kind!=='meal')||(c.fame>=3&&c.price<=15)) add[c.id]=true;});
+    Object.keys(FAME).forEach(id=>{if(!CAND_OF[id]&&(POI_PRICE[id]||0)>=20*CK&&FAME[id]<3) skip[id]=true;});
+    CANDS.forEach(c=>{if((c.fame>=2&&c.price<=5*CK&&c.kind!=='meal')||(c.fame>=3&&c.price<=15*CK)) add[c.id]=true;});
   } else if(k==='leisure'){
     DAYS.forEach((d,i)=>{const idx=i+1; const ps=dayPOIs(idx).filter(id=>!CAND_OF[id]);
       const keepAlways=ps.filter(id=>VISIT[id]&&(VISIT[id][1]==='meal'||VISIT[id][1]==='show'||VISIT[id][1]==='snack'));
@@ -1327,12 +1338,12 @@ function menuHTML(x){
   const items=CANDS.filter(c=>c.day===x.idx&&!isAdded(c.id)), ex=extraPicks(x);
   if(!items.length&&!x.skipped.length&&!ex.length) return '';
   const star=n=>'★'.repeat(n)+'☆'.repeat(3-n);
-  const chip=(id,label,fame,price,dw,closed,isSkip)=>'<button type="button" class="pick'+(closed?' closed':'')+'" '+(isSkip?'data-unskip':'data-add')+'="'+id+'"><span class="plus">＋</span><span>'+esc(label)+'</span><span class="pm">'+star(fame||1)+'・'+(price?'€'+price:'免費')+'・'+dw+' 分'+(closed?'・當天休':'')+'</span></button>';
+  const chip=(id,label,fame,price,dw,closed,isSkip)=>'<button type="button" class="pick'+(closed?' closed':'')+'" '+(isSkip?'data-unskip':'data-add')+'="'+id+'"><span class="plus">＋</span><span>'+esc(label)+'</span><span class="pm">'+star(fame||1)+'・'+(price?eur(price):'免費')+'・'+dw+' 分'+(closed?'・當天休':'')+'</span></button>';
   const wd=x.date.getDay();
   return '<div class="menu"><div class="lbl">可加入的景點（點一下排進今天的路線）</div><div class="picks">'+
     x.skipped.map(id=>chip(id,PLACES[id].n,FAME[id],POI_PRICE[id]||0,VISIT[id]?VISIT[id][0]:30,false,true)).join('')+
     items.map(c=>chip(c.id,c.n,c.fame,c.price,c.dw,c.closed&&c.closed.includes(wd),false)).join('')+'</div>'+
-    (ex.length?'<div class="lbl" style="margin-top:10px">同城市其他天沒排到的點（點一下移進今天）</div><div class="picks">'+ex.map(id=>'<button type="button" class="pick" data-movein="'+id+'"><span class="plus">⇢</span><span>'+esc(PLACES[id].n)+'</span><span class="pm">'+star(FAME[id]||1)+'・'+((POI_PRICE[id]||(CAND_OF[id]&&CAND_OF[id].price))?'€'+(POI_PRICE[id]||CAND_OF[id].price):'免費')+'・'+(VISIT[id]?VISIT[id][0]:30)+' 分</span></button>').join('')+'</div>':'')+'</div>';
+    (ex.length?'<div class="lbl" style="margin-top:10px">同城市其他天沒排到的點（點一下移進今天）</div><div class="picks">'+ex.map(id=>'<button type="button" class="pick" data-movein="'+id+'"><span class="plus">⇢</span><span>'+esc(PLACES[id].n)+'</span><span class="pm">'+star(FAME[id]||1)+'・'+((POI_PRICE[id]||(CAND_OF[id]&&CAND_OF[id].price))?eur(POI_PRICE[id]||CAND_OF[id].price):'免費')+'・'+(VISIT[id]?VISIT[id][0]:30)+' 分</span></button>').join('')+'</div>':'')+'</div>';
 }
 
 /* ---------- 必去清單 ---------- */
@@ -1387,7 +1398,7 @@ function nameFromURL(u){const m=String(u).match(/\/place\/([^/@?]+)/); if(!m) re
 function renderMust(r){
   const box=$('#mustBox'); if(!box) return; const md=r.mustDay||{}, list=S.must||[];
   const stars=Object.keys(S.mustIds||{}).filter(id=>PLACES[id]);
-  const dayOpt=v=>'<option value="0"'+(+v?'':' selected')+'>自動安排</option>'+r.days.filter(x=>x.eb||x.idx===DAYS.length-1).map(x=>'<option value="'+x.idx+'"'+(+v===x.idx?' selected':'')+'>D'+x.idx+' '+fmtD(x.date)+' '+esc(x.title)+'</option>').join('');
+  const dayOpt=v=>'<option value="0"'+(+v?'':' selected')+'>自動安排</option>'+r.days.filter(x=>x.eb||x.idx===DAYS.length-HOME_DAY).map(x=>'<option value="'+x.idx+'"'+(+v===x.idx?' selected':'')+'>D'+x.idx+' '+fmtD(x.date)+' '+esc(x.title)+'</option>').join('');
   const item=m=>{const st=md[m.id]||{}, ok=mustOK(m);
     const where=!ok?'<span class="bad-t">位置還沒設定或讀不到座標</span>':st.off?'<span class="muted">暫不排入</span>':st.fail?'<span class="bad-t">這天排不進去，請換一天</span>':st.day?'D'+st.day+(st.auto?'・自動安排':'・指定'):'';
     return '<li class="mi'+(st.off?' off':'')+'"><span class="star">★</span><div class="mi-b"><b>'+esc(m.n||'（未命名）')+'</b> <span class="tag2 t-'+(m.kind==='meal'?'meal':m.kind==='route'?'move':'visit')+'">'+MUST_KIND[m.kind]+'</span>'+(m.kind==='route'?' <span class="small muted">'+esc(MODE_LBL[m.mode]||'')+'</span>':'')+'<div class="small">'+where+(st.day&&!st.off?' <button type="button" class="linkbtn" data-goday="'+st.day+'">看這天</button>':'')+'</div></div>'+
@@ -1403,7 +1414,7 @@ function renderMust(r){
         '<label>怎麼走<select id="mf-mode" data-mf="mode">'+['car','walk','transit','taxi'].map(k=>'<option value="'+k+'"'+(m.mode===k?' selected':'')+'>'+MODE_LBL[k]+'</option>').join('')+'</select></label>':'')+
       '<label>'+(isR?'終點停留（分）':'停留（分）')+'<input type="number" id="mf-dur" data-mf="dur" min="0" step="5" value="'+(+m.dur||0)+'"></label>'+
       (isM?'<label>時段<select id="mf-slot" data-mf="slot"><option value="any"'+(m.slot==='any'?' selected':'')+'>不限</option><option value="lunch"'+(m.slot==='lunch'?' selected':'')+'>午餐</option><option value="dinner"'+(m.slot==='dinner'?' selected':'')+'>晚餐</option></select></label>':'<label>指定時間（可空）<input type="time" id="mf-at" data-mf="at" value="'+esc(m.at||'')+'"></label>')+
-      '<label>費用 €／人<input type="number" id="mf-price" data-mf="price" min="0" step="1" value="'+(+m.price||0)+'"></label>'+
+      '<label>費用 '+CUR+'／人<input type="number" id="mf-price" data-mf="price" min="0" step="1" value="'+(+m.price||0)+'"></label>'+
       '<label>付款<select id="mf-pay" data-mf="pay">'+Object.keys(PAY).map(k=>'<option value="'+k+'"'+(m.pay===k?' selected':'')+'>'+PAY[k]+'</option>').join('')+'</select></label>'+
       '<label class="wide">安排在<select id="mf-day" data-mf="day">'+dayOpt(m.day)+'</select></label>'+
       '<label class="wide">連結（可空）<input type="text" id="mf-url" data-mf="url" value="'+esc(m.url)+'" placeholder="官網、訂位或文章網址"></label>'+
@@ -1488,7 +1499,7 @@ function renderSummary(r){
   const pp=r.pax>1, okAll=activeCities().every(c=>allocate(c).ok), sg=stratOf();
   $('#summary').innerHTML=
    '<div class="stat main"><div class="lbl">'+(pp?'每人預算':'總預算')+'（'+MODE_NAME[S.mode]+'・'+sg.name+'）</div><div class="big">'+twd(r.per)+'</div><div class="small">'+(pp?'全團 '+r.pax+' 人 '+twd(r.twd)+' ・ ':'')+'當地花費 '+eur(r.eur)+' ＋ 機票與行前雜支</div></div>'+
-   '<div class="stat'+(okAll?'':' badstat')+'"><div class="lbl">住宿 8 晚・入住 '+checkins()+' 次'+(okAll?'':'・有住宿住不下')+'</div><div class="mid">'+eur(r.stay)+'</div>'+(pp?'<div class="small muted">每人 '+eur(r.stay/r.pax)+'</div>':'')+'</div>'+
+   '<div class="stat'+(okAll?'':' badstat')+'"><div class="lbl">住宿 '+STRATS[S.strat].nights.filter(Boolean).length+' 晚・入住 '+checkins()+' 次'+(okAll?'':'・有住宿住不下')+'</div><div class="mid">'+eur(r.stay)+'</div>'+(pp?'<div class="small muted">每人 '+eur(r.stay/r.pax)+'</div>':'')+'</div>'+
    '<div class="stat"><div class="lbl">當地交通</div><div class="mid">'+eur(r.transport)+'</div>'+(pp?'<div class="small muted">每人 '+eur(r.transport/r.pax)+'</div>':'')+'</div>'+
    '<div class="stat fare'+(flightStale()?' stale':'')+'"><div class="lbl">機票（每人）'+(flightStale()?'・日期已改':'')+'</div><div class="mid">'+twd(S.flight)+'</div>'+(()=>{const L=fareLog(); if(!L.length) return ''; const lo=Math.min(...L.map(e=>e.p)), last=L[L.length-1], tg=+S.fareTarget||0; return '<div class="fl-mini">'+fareSpark(L,160,30,false)+'<span class="small'+(tg&&last.p<=tg?' fl-ok':'')+'">最低 '+twd(lo)+'・'+L.length+' 筆'+(tg&&last.p<=tg?'・已達目標':'')+'</span></div>';})()+'<button type="button" class="fare-btn" data-open="settings" data-focus="flight">查價・記錄價格 ↗</button></div>'+
    '<div class="stat"><div class="lbl">門票＋餐費</div><div class="mid">'+eur(r.tickets+r.meals)+'</div>'+(pp?'<div class="small muted">每人 '+eur((r.tickets+r.meals)/r.pax)+'</div>':'')+'</div>';
@@ -1512,7 +1523,7 @@ function timeline(x){
     if(l.how==='flight'){push('flight',l.a.n+' 起飛',0,{leg:l}); return;}
     const last=i===legs.length-1;
     if(budget&&!dinner&&last&&l.b.stay&&t>=toMin(MEAL.dinnerAfter)){push('meal','晚餐',MEAL.dinnerMin,{where:l.a.n+' 附近',cost:budget*MEAL.split.dinner}); dinner=true;}
-    const buf=l.how==='transit'&&/CP|火車|Alfa|區間車/.test(l.detail||'')?10:0;
+    const buf=l.how==='transit'&&(TRIP_META.railRe?new RegExp(TRIP_META.railRe):/CP|火車|Alfa|區間車|JR|近鐵|私鐵|特急|急行|新幹線|列車/).test(l.detail||'')?10:0;
     push('move',l.a.n+' → '+l.b.n,(l.mins||0)+buf,{leg:l,buf});
     const b=l.b, v=VISIT[b.id];
     if(v&&!isSkipped(b.id)){
@@ -1576,11 +1587,11 @@ function legOpts(seg,r,car){const km=r.km!=null?r.km:0, o=new Set([r.how]);
   return ['walk','transit','taxi','car'].filter(m=>o.has(m));}
 function altLeg(m,a,b,seg,P){const km=roadKm(a,b);
   if(m==='walk') return {how:'walk',label:'步行',km,mins:km/4.5*60,cost:0,detail:'步行',tm:'walking'};
-  if(m==='taxi') return {how:'taxi',label:'計程車',km,mins:km>15?km/55*60+8:km/24*60+6,cost:uber(km),detail:'Uber／Bolt／計程車（估）',tm:'driving'};
+  if(m==='taxi') return {how:'taxi',label:'計程車',km,mins:km>15?km/55*60+8:km/24*60+6,cost:uber(km),detail:TX.label,tm:'driving'};
   if(m==='car') return driveLeg(a,b,seg,P);
-  if(km>30) return {how:'transit',label:'大眾',km,mins:km/90*60+25,cost:+(km*0.1).toFixed(2),detail:'CP 火車／長途巴士（估）',tm:'transit'};
+  if(km>30) return {how:'transit',label:'大眾',km,mins:km/90*60+25,cost:+(km*RAILX.km2).toFixed(2),detail:RAILX.label2,tm:'transit'};
   const city=a.stay?a.city:(b.stay?b.city:(CAP[a.city]?a.city:(CAP[b.city]?b.city:a.city)));
-  return {how:'transit',label:'大眾',km,mins:8+km/18*60,cost:FARE[city]||1.66,detail:'地鐵／公車／電車',tm:'transit',fareCity:city};
+  return {how:'transit',label:'大眾',km,mins:8+km/18*60,cost:FARE[city]||(TRIP_META.fare0||1.66),detail:'地鐵／公車／電車',tm:'transit',fareCity:city};
 }
 function setLegMode(okey,m,def){S.legMode=S.legMode||{}; if(!m||m===def) delete S.legMode[okey]; else S.legMode[okey]=m; recompute();}
 function dayOf(i){return UI.r&&UI.r.days[i-1];}
@@ -1870,21 +1881,21 @@ let MVD=[];
 function fareKey(){return S.start+'/'+TOKENS.length;}
 function tplTitle(d,idx){try{return typeof d.t==='function'?d.t(idx?ctxOf(idx):{}):d.t;}catch(e){return '';}}
 function renderPlanEd(){const el=$('#planEd'); if(!el) return; rebuildPlan(); const L=TOKENS.length, p=planOf(), used=new Set(p), dropped=DEF_PLAN.filter(t=>!used.has(t));
-  el.innerHTML='<div class="pe-top"><label class="pe-ret">回程起飛日<input type="date" id="retDate" value="'+iso(dateOf(L-1))+'" min="'+iso(dateOf(3))+'"></label>'+
+  el.innerHTML='<div class="pe-top"><label class="pe-ret">回程起飛日<input type="date" id="retDate" value="'+iso(dateOf(L-HOME_DAY))+'" min="'+iso(dateOf(3))+'"></label>'+
     '<div class="pe-len"><button type="button" data-plen="-1" aria-label="少一天">−</button><b>'+L+' 天</b><button type="button" data-plen="1" aria-label="多一天">＋</button></div></div>'+
     '<ol class="pe-list">'+p.map((tok,i)=>{const idx=i+2, fc=freeCity(tok), city=fc||STRATS[S.strat].nights[idx-1]||'';
       return '<li'+(fc?' class="free"':'')+'><span class="pe-d">D'+idx+'<small>'+fmtD(dateOf(idx))+'</small></span><span class="pe-t">'+esc(tplTitle(DAYS[idx-1],idx))+'</span>'+
         (fc?'<select data-pcity="'+i+'" aria-label="自由日城市">'+FREE_CITIES.map(c=>'<option value="'+c+'"'+(c===fc?' selected':'')+'>住'+CITY_ZH[c]+'</option>').join('')+'</select>':'<span class="pe-c">住'+(CITY_ZH[city]||'—')+'</span>')+
         '<span class="pe-b"><button type="button" data-pmv="'+i+'" data-dir="-1" aria-label="往前"'+(i===0?' disabled':'')+'>↑</button><button type="button" data-pmv="'+i+'" data-dir="1" aria-label="往後"'+(i===p.length-1?' disabled':'')+'>↓</button><button type="button" data-prm="'+i+'" aria-label="刪除這天"'+(p.length<2?' disabled':'')+'>×</button></span></li>';}).join('')+
-    '<li class="fixed"><span class="pe-d">D'+(L-1)+'<small>'+fmtD(dateOf(L-1))+'</small></span><span class="pe-t">返程（'+(CITY_ZH[RET_OF()]||FLIGHTS.back.from)+'起飛）</span></li></ol>'+
+    '<li class="fixed"><span class="pe-d">D'+(L-HOME_DAY)+'<small>'+fmtD(dateOf(L-HOME_DAY))+'</small></span><span class="pe-t">返程（'+(CITY_ZH[RET_OF()]||FLIGHTS.back.from)+'起飛）</span></li></ol>'+
     '<div class="pe-add"><span>加一天自由日</span>'+FREE_CITIES.map(c=>'<button type="button" data-pfree="'+c+'">＋'+CITY_ZH[c]+'</button>').join('')+'</div>'+
-    (Object.keys(TOURS).some(k=>TOURS[k].add)?'<div class="pe-add"><span>加一天一日團（含交通門票）</span>'+Object.keys(TOURS).filter(k=>TOURS[k].add).map(k=>'<button type="button" data-ptour="'+k+'">＋'+esc(TOURS[k].n.replace(/^一日團：/,''))+'・€'+TOURS[k].price+'</button>').join('')+'</div>':'')+
+    (Object.keys(TOURS).some(k=>TOURS[k].add)?'<div class="pe-add"><span>加一天一日團（含交通門票）</span>'+Object.keys(TOURS).filter(k=>TOURS[k].add).map(k=>'<button type="button" data-ptour="'+k+'">＋'+esc(TOURS[k].n.replace(/^一日團：/,''))+'・'+eur(TOURS[k].price)+'</button>').join('')+'</div>':'')+
     (dropped.length?'<div class="pe-add"><span>加回原本的行程日</span>'+dropped.map(t=>'<button type="button" data-pback="'+t+'">＋'+esc(tplTitle(BASE_DAYS[+t.slice(1)-1]))+'</button>').join('')+'</div>':'')+
     '<p class="small muted">刪掉的那天，景點會出現在同城市其他天的「可加入」選單；每個景點旁的「移到」也能把點換到別天。回程城市跟著最後一晚住哪裡走，機票日期與查價連結會一起更新。</p>';}
 function planChanged(msg){rebuildPlan(); if(UI.day&&UI.day>DAYS.length) UI.day=null; renderStays(); recompute(); renderPlanEd(); if(msg) toast(typeof msg==='function'?msg():msg);}
 function planInit(){const el=$('#planEd'); if(!el) return;
   el.addEventListener('click',e=>{const b=e.target.closest('button'); if(!b||b.disabled) return; const p=planOf().slice();
-    if(b.dataset.plen){setTripLen(TOKENS.length+(+b.dataset.plen)); planChanged(()=>'行程改為 '+TOKENS.length+' 天，回程 '+fmtD(dateOf(TOKENS.length-1)));}
+    if(b.dataset.plen){setTripLen(TOKENS.length+(+b.dataset.plen)); planChanged(()=>'行程改為 '+TOKENS.length+' 天，回程 '+fmtD(dateOf(TOKENS.length-HOME_DAY)));}
     else if(b.dataset.pmv!=null){const i=+b.dataset.pmv, j=i+(+b.dataset.dir); [p[i],p[j]]=[p[j],p[i]]; S.plan=p; planChanged('已調換順序，交通重新串接');}
     else if(b.dataset.prm!=null){p.splice(+b.dataset.prm,1); S.plan=p; planChanged('已刪除這天，行程改為 '+(p.length+3)+' 天');}
     else if(b.dataset.ptour){const id=b.dataset.ptour, c=TOURS[id].add; let k=-1; p.forEach((t,i)=>{if((nightCity(t)||BASE_NIGHTS[S.strat][+t.slice(1)-1])===c) k=i;}); p.splice(k<0?p.length:k+1,0,'g:'+id); S.plan=p; planChanged('加了一天：'+TOURS[id].n);}
@@ -1892,7 +1903,7 @@ function planInit(){const el=$('#planEd'); if(!el) return;
     else if(b.dataset.pback){const t=b.dataset.pback, n=+t.slice(1); let k=p.findIndex(x=>x[0]==='t'&&+x.slice(1)>n); if(k<0) k=p.length; p.splice(k,0,t); S.plan=p; planChanged('已加回這天');}});
   el.addEventListener('change',e=>{const t=e.target;
     if(t.dataset.pcity!=null){const p=planOf().slice(); p[+t.dataset.pcity]='f:'+t.value; S.plan=p; planChanged();}
-    else if(t.id==='retDate'&&t.value){const d0=new Date(S.start+'T12:00:00'), d1=new Date(t.value+'T12:00:00'); const R=Math.round((d1-d0)/864e5)+1; setTripLen(R+1); planChanged(()=>'回程改為 '+fmtD(dateOf(TOKENS.length-1))+'，共 '+TOKENS.length+' 天');}});
+    else if(t.id==='retDate'&&t.value){const d0=new Date(S.start+'T12:00:00'), d1=new Date(t.value+'T12:00:00'); const R=Math.round((d1-d0)/864e5)+1; setTripLen(R+HOME_DAY); planChanged(()=>'回程改為 '+fmtD(dateOf(TOKENS.length-HOME_DAY))+'，共 '+TOKENS.length+' 天');}});
   document.addEventListener('change',e=>{const s=e.target.closest('.mvsel'); if(!s||!s.value) return; const id=s.dataset.mv, idx=+s.value; moveTo(id,tokOf(idx)); recompute(); toast(place(id).n+' 移到 D'+idx+'，兩天的交通都已重算');});
   $('#days').addEventListener('click',e=>{const b=e.target.closest('[data-movein]'); if(!b) return; e.stopPropagation(); const d=+b.closest('.day').dataset.day; moveTo(b.dataset.movein,tokOf(d)); recompute(); toast(place(b.dataset.movein).n+' 排進 D'+d);},true);}
 function mvSelect(id,cur){if(!(POI_HOME[id]||CAND_OF[id])||!MVD.length) return ''; return ' <select class="mvsel" data-mv="'+esc(id)+'" title="移到其他天" aria-label="把 '+esc(place(id).n)+' 移到其他天"><option value="">移到…</option>'+MVD.filter(o=>o[0]!==cur).map(o=>'<option value="'+o[0]+'">'+esc(o[1])+'</option>').join('')+'</select>';}
@@ -1904,7 +1915,7 @@ function extraPicks(x){const city=x.d.free||cityOfDay(x), tok=tokOf(x.idx);
 /* ---------- 一日團 ---------- */
 function tourCard(x){const tok=tokOf(x.idx), on=x.d.tour, cand=on?null:Object.keys(TOURS).find(k=>TOURS[k].for===tok);
   const id=on||cand; if(!id) return ''; const T0=TOURS[id];
-  return '<div class="tourc'+(on?' on':'')+'"><div class="tc-h"><span class="tc-b">'+(on?'已改成一日團':'有一日團可選')+'</span><b>'+esc(T0.n.replace(/^一日團：/,''))+'</b><span class="tc-p">約 €'+T0.price+'／人</span></div>'+
+  return '<div class="tourc'+(on?' on':'')+'"><div class="tc-h"><span class="tc-b">'+(on?'已改成一日團':'有一日團可選')+'</span><b>'+esc(T0.n.replace(/^一日團：/,''))+'</b><span class="tc-p">約 '+eur(T0.price)+'／人</span></div>'+
     '<p class="small">'+esc(T0.incl)+'。'+esc(T0.rating)+'。</p>'+(on?'':'<p class="small muted">'+esc(T0.why)+'</p>')+
     '<div class="tc-a">'+(tok[0]==='g'?'<button type="button" class="tc-btn" data-tour-rm="'+x.idx+'">刪掉這天</button>':on?'<button type="button" class="tc-btn" data-tour-off="'+tok+'">改回自己走</button>':'<button type="button" class="tc-btn pri" data-tour-on="'+tok+'|'+id+'">改成一日團</button>')+
     '<a href="'+esc(T0.src)+'" target="_blank" rel="noopener">參考來源・訂購頁</a></div></div>';}
@@ -1992,7 +2003,7 @@ function renderStays(){migrateStays();
       '<span class="tag">'+o.tag+'</span>'+stayGallery(PHOTOS['stay_'+c.toLowerCase()+'_'+i]||[],c,false,o.n)+'<h3>'+esc(o.n)+'</h3><span class="addr">'+esc(o.a)+'</span>'+
       '<span class="small">'+esc(o.rating)+' ・ '+esc(o.range)+'</span><span class="small muted">'+esc(o.why)+'</span>'+types(o)+
       '<span class="fit"></span>'+
-      '<div class="row"><label for="p-'+c+i+'">雙人房 €/晚</label><input type="number" id="p-'+c+i+'" data-pc="'+c+'" data-pi="'+i+'" value="'+s.price[i]+'" min="0" step="5"></div>'+
+      '<div class="row"><label for="p-'+c+i+'">雙人房 '+CUR+'/晚</label><input type="number" id="p-'+c+i+'" data-pc="'+c+'" data-pi="'+i+'" value="'+s.price[i]+'" min="0" step="5"></div>'+
       '<div class="row">'+lives()+'<a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(o.n+' '+o.a)+'" target="_blank" rel="noopener">地圖與評論</a></div></div>').join('');
     const cu=s.custom, ok=parseCoord(cu.coord);
     const custom='<div class="opt" role="radio" tabindex="0" aria-checked="'+(s.sel===9)+'" data-city="'+c+'" data-i="9"><span class="tag">自訂</span>'+stayGallery(cu.img||[],c,true)+
@@ -2000,7 +2011,7 @@ function renderStays(){migrateStays();
       '<label class="lbl" for="ca-'+c+'">地址</label><input type="text" id="ca-'+c+'" data-cc="'+c+'" data-k="a" value="'+esc(cu.a)+'" placeholder="貼上地址">'+
       '<label class="lbl" for="cg-'+c+'">座標或 Google 地圖網址</label><input type="text" id="cg-'+c+'" data-cc="'+c+'" data-k="coord" value="'+esc(cu.coord)+'" placeholder="緯度, 經度">'+
       '<span class="status '+(cu.coord?(ok?'ok':'err'):'')+'" id="cs-'+c+'">'+(cu.coord?(ok?'已定位 '+ok.lat.toFixed(4)+', '+ok.lng.toFixed(4):'讀不到座標，請貼「緯度, 經度」或地圖網址'):'')+'</span>'+
-      '<div class="row"><label for="cp-'+c+'">雙人房 €/晚</label><input type="number" id="cp-'+c+'" data-cc="'+c+'" data-k="price" value="'+cu.price+'" min="0" step="5" style="width:90px">'+
+      '<div class="row"><label for="cp-'+c+'">雙人房 '+CUR+'/晚</label><input type="number" id="cp-'+c+'" data-cc="'+c+'" data-k="price" value="'+cu.price+'" min="0" step="5" style="width:90px">'+
       '<label for="ck2-'+c+'">最大房型 人</label><input type="number" id="ck2-'+c+'" data-cc="'+c+'" data-k="cap" value="'+(cu.cap||2)+'" min="1" max="8" step="1" style="width:70px"></div>'+
       '<span class="fit"></span><div class="row">'+lives()+'</div>'+
       '<div class="row"><label class="upbtn">上傳照片<input type="file" accept="image/*" multiple data-cimg="'+c+'" hidden></label><span class="small muted">最多 4 張，存在這台裝置與存檔裡</span></div></div>';
@@ -2079,7 +2090,7 @@ function cashPlan(r){
 function renderCash(r){
   const c=cashPlan(r);
   $('#cashBox').innerHTML='<div class="cash-head"><div><div class="lbl">建議每人帶現金</div><div class="big num">'+eur(c.per)+'</div><div class="small muted">全團 '+c.pax+' 人共 '+eur(c.total)+'，約 '+twd(c.total*S.fx)+'</div></div>'+
-   '<div class="small"><div>指定或可能要付現的項目 <b class="num">'+eur(c.itemSum)+'</b></div><div>零錢與小費 '+c.tripDays+' 天 × '+eur(CASH.perDay+CASH.tips)+' <b class="num">'+eur(c.daily)+'</b></div>'+(c.tax?'<div>住宿城市稅（部分住宿偏好現金）<b class="num">'+eur(c.tax)+'</b></div>':'')+'<div>緊急預備金 <b class="num">'+eur(c.reserve)+'</b></div><div class="muted">合計後無條件進位到 €50</div></div></div>'+
+   '<div class="small"><div>指定或可能要付現的項目 <b class="num">'+eur(c.itemSum)+'</b></div><div>零錢與小費 '+c.tripDays+' 天 × '+eur(CASH.perDay+CASH.tips)+' <b class="num">'+eur(c.daily)+'</b></div>'+(c.tax?'<div>住宿城市稅（部分住宿偏好現金）<b class="num">'+eur(c.tax)+'</b></div>':'')+'<div>緊急預備金 <b class="num">'+eur(c.reserve)+'</b></div><div class="muted">合計後無條件進位到 '+CUR+'50</div></div></div>'+
    '<table class="mini"><thead><tr><th>天</th><th>項目</th><th class="r">每人</th><th>付款</th></tr></thead><tbody>'+c.items.map(i=>'<tr><td>D'+i.day+'</td><td>'+esc(i.n)+'</td><td class="r num">'+eur(i.v)+'</td><td>'+PAY[i.p]+'</td></tr>').join('')+'</tbody></table>'+
    '<p class="note">'+CASH_TIPS.map(esc).join('<br>')+'</p>';
 }
@@ -2116,7 +2127,7 @@ function bookletHTML(){
   const f=d=>d.getFullYear()+'/'+(d.getMonth()+1)+'/'+d.getDate()+'（'+WD[d.getDay()]+'）';
   const H=[];
   H.push('<section class="cover"><div class="tiles"></div><p class="eb">'+esc(TRIP_META.eyebrow)+'</p><h1>'+esc(TRIP_META.title)+'</h1><p>'+f(dateOf(1))+' — '+f(dateOf(DAYS.length))+'　'+pax+' 人</p>'+
-    '<table class="kv"><tr><th>住宿安排</th><td>'+esc(sg.name)+'</td></tr><tr><th>交通方案</th><td>'+esc(MODE_NAME[S.mode])+'</td></tr><tr><th>每人預算</th><td>'+twd(r.per)+'（全團 '+twd(r.twd)+'）</td></tr><tr><th>建議每人現金</th><td>'+eur(c.per)+'</td></tr><tr><th>匯率假設</th><td>€1 ＝ NT$'+S.fx+'</td></tr></table></section>');
+    '<table class="kv"><tr><th>住宿安排</th><td>'+esc(sg.name)+'</td></tr><tr><th>交通方案</th><td>'+esc(MODE_NAME[S.mode])+'</td></tr><tr><th>每人預算</th><td>'+twd(r.per)+'（全團 '+twd(r.twd)+'）</td></tr><tr><th>建議每人現金</th><td>'+eur(c.per)+'</td></tr><tr><th>匯率假設</th><td>'+CUR+'1 ＝ NT$'+S.fx+'</td></tr></table></section>');
   // overview
   H.push('<section><h2>行程總覽</h2><table><thead><tr><th>天</th><th>日期</th><th>行程</th><th>住宿</th></tr></thead><tbody>'+r.days.map(x=>'<tr><td>D'+x.idx+'</td><td>'+fmtD(x.date)+'</td><td>'+esc(x.title)+'</td><td>'+(x.eb?esc(stayPlace(x.eb).n):'—')+'</td></tr>').join('')+'</tbody></table></section>');
   // days
@@ -2137,7 +2148,7 @@ function bookletHTML(){
       '<tr><th>地址</th><td>'+esc(sp.a)+'</td></tr><tr><th>電話</th><td>'+esc(o&&o.tel||'見訂房確認信')+'</td></tr>'+(o&&o.mail?'<tr><th>Email</th><td>'+esc(o.mail)+'</td></tr>':'')+
       '<tr><th>入住</th><td>'+blocks(ct).map(blockText).join('<br>')+'</td></tr><tr><th>房型</th><td>'+esc(al.label)+(al.ok?'':'（注意：'+esc(al.msg)+'）')+'</td></tr>'+
       '<tr><th>城市稅</th><td>'+(tx?eur(tx.v)+'／人／晚'+(tx.est?'（約，請向住宿確認）':'')+'，入住時現場收，部分住宿偏好現金':'—')+'</td></tr>'+
-      '<tr><th>訂房編號</th><td class="blank"></td></tr><tr><th>付款狀態</th><td>□ 已付清　□ 現場付　□ 押金 €＿＿＿</td></tr></table></div>';}).join('')+'</section>');
+      '<tr><th>訂房編號</th><td class="blank"></td></tr><tr><th>付款狀態</th><td>□ 已付清　□ 現場付　□ 押金 '+CUR+'＿＿＿</td></tr></table></div>';}).join('')+'</section>');
   // payment & cash
   H.push('<section class="pb"><h2>付款與現金</h2><table class="kv"><tr><th>建議每人現金</th><td><b>'+eur(c.per)+'</b>（全團 '+eur(c.total)+'）</td></tr><tr><th>組成</th><td>付現項目 '+eur(c.itemSum)+' ＋ 零錢小費 '+eur(c.daily)+(c.tax?' ＋ 城市稅 '+eur(c.tax):'')+' ＋ 預備金 '+eur(c.reserve)+'</td></tr></table>'+
     '<h3>可能要付現的項目</h3><table><thead><tr><th>天</th><th>項目</th><th class="r">每人</th><th>付款</th></tr></thead><tbody>'+c.items.map(i=>'<tr><td>D'+i.day+'</td><td>'+esc(i.n)+'</td><td class="r">'+eur(i.v)+'</td><td>'+PAY[i.p]+'</td></tr>').join('')+'</tbody></table>'+
